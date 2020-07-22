@@ -1,0 +1,200 @@
+---
+title: "BANJIA DATA Monitor"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    social: menu
+    vertical_layout: fill
+    source_code: 
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(plotly)
+source('ddd.R')
+```
+
+
+Summary
+===================================== 
+
+
+Column {data-width=300}
+-----------------------------------------------------------------------
+
+### 每日可互动量 {data-width=350}
+
+- 只计算30天内艺人自己发出的微博及内部评论，在别人微博下的评论不计入
+- 30天内的计算方法：如果今天是8月1日，计入7月2日-7月31日发出的所有微博和评论
+- 互动量(s) = 微博数(w) * 3 + 内部评论(c) * 2
+
+```{r}
+renderTable({
+  avail_score
+}, spacing = "xs", width = '100%', bordered = TRUE, striped = TRUE, align = "c")
+```
+
+Column {.tabset data-width=650}
+-------------------------------------
+
+### 最近7天每小时增长量
+
+- 每小时可互动的微博转赞评增长+一级自评赞回复增长+二级自评赞增长
+- 删除点赞评会导致出现负数
+- 每条线最后一段为目前增长量，非完整一小时增长量
+    
+```{r}
+renderPlotly({
+  fig <- plot_ly(hourly_inc, x = ~hour, y = ~ZKN, name = 'ZKN', type = 'scatter', mode = 'lines+markers', line = list(width = 3)) 
+  fig <- fig %>% add_trace(y = ~XKY, name = 'XKY', mode = 'lines+markers', line = list(width = 3)) 
+  fig %>% layout(xaxis = list(showspikes=TRUE, spikemode='across',spikesnap='cursor',showline=TRUE,showgrid=TRUE), yaxis = list(title="increase"), autosize=TRUE, height = "99%", showlegend = TRUE, hovermode='x')
+}) 
+```
+
+
+### 每日增长量
+
+- 每日可互动的微博转赞评增长+一级自评赞回复增长+二级自评赞增长
+- 每条线最后一段为目前增长量，非完整一天增长量
+
+```{r}
+renderPlotly({
+  fig <- plot_ly(daily_inc, x = ~hour, y = ~ZKN, name = 'ZKN', type = 'scatter', mode = 'lines+markers') 
+  fig <- fig %>% add_trace(y = ~XKY, name = 'XKY', mode = 'lines+markers') 
+  fig %>% layout(yaxis = list(title = "increase"), autosize=TRUE, height = "99%")
+}
+)
+```   
+ 
+
+Single Weibo {data-orientation=rows}
+=====================================  
+
+Inputs {.sidebar}
+-------------------------------------
+
+```{r}
+selectInput("user_input", "Select a weibo user", choices=avail_user, selected = avail_user[1], multiple = FALSE,
+  selectize = TRUE, width = NULL, size = NULL)
+
+avail_weibo <- reactive({
+  user_input = input$user_input
+  weibo.data %>% filter(user==user_input) %>% filter(as.Date(crawler_time, tz="Asia/Taipei") == today) %>% 
+    distinct(post_time) %>% mutate(post_time = as.character(post_time)) %>% pull()
+})
+
+renderUI({selectInput("weibo_input", "Select a weibo by post time", choices=avail_weibo(), selected = avail_weibo()[1], multiple = FALSE,
+  selectize = TRUE, width = NULL, size = NULL)})
+
+weibo_link <- reactive({
+  user_input = input$user_input
+  post_time_input = input$weibo_input
+  weibo.data %>% filter(user==user_input) %>% filter(as.character(post_time)==post_time_input) %>% distinct(link) %>% pull()
+})
+
+renderUI({
+  a("weibo link", href=weibo_link(), target="_blank")
+})
+
+weibo_info <- reactive({
+  user_input = input$user_input
+  post_time_input = input$weibo_input
+  weibo.data %>% 
+    filter(user==user_input) %>% 
+    filter(as.character(post_time)==post_time_input) %>% 
+    filter(child_comment_comment_id!="") %>% 
+    distinct(link, child_comment_level, child_comment_comment_id) %>% 
+    group_by(child_comment_level) %>% 
+    count() %>% 
+    ungroup() %>% 
+    as.data.frame()
+})
+
+renderUI({
+  output = ""
+  info = weibo_info()
+  if (nrow(info) > 0) {
+    if (1 %in% info$child_comment_level) output = paste(output, "weibo has", info$n[info$child_comment_level==1], "level-1 comment;<br/>")
+    if (2 %in% info$child_comment_level) output = paste(output, "weibo has", info$n[info$child_comment_level==2], "level-2 comment;")
+  }
+  HTML(output)
+})
+
+```
+ 
+Row {.tabset .tabset-fade}
+-------------------------------------
+    
+### 点赞评每分钟增量
+    
+```{r}
+w_zzp = reactive({
+  user_input = input$user_input
+  post_time_input = input$weibo_input
+  weibo_zzp(user_input, post_time_input)
+})
+renderPlotly({
+  fig <- plot_ly(w_zzp(), x = ~crawler_time, y = ~like, name = 'like', type = 'scatter', mode = 'lines+markers', line = list(width = 3))
+  fig <- fig %>% add_trace(y = ~comment, name = 'comment', mode = 'lines+markers', line = list(width = 3)) 
+  fig <- fig %>% add_trace(y = ~forward, name = 'forward', mode = 'lines+markers', line = list(width = 3)) 
+  fig %>% layout(xaxis = list(showspikes=TRUE, spikemode='across',spikesnap='cursor',showline=TRUE,showgrid=TRUE), yaxis = list(title="increase"), autosize=TRUE, showlegend = TRUE, hovermode='x')
+}) 
+```
+    
+
+### 一级评论赞评每分钟增量
+
+```{r}
+c1_zp = reactive({
+  user_input = input$user_input
+  post_time_input = input$weibo_input
+  comment1_zp(user_input, post_time_input)
+})
+renderUI({
+  dat = c1_zp()
+  if (nrow(dat) > 0) {
+    output$plot_c1 <- renderPlotly({
+      fig <- ggplot(data=dat, aes(x=crawler_time, y=increase, group=comment), height = "90%") +
+        geom_line(aes(linetype=action, color=comment), size=0.7) +
+        theme_bw()
+      fig = fig %>% ggplotly()
+      fig %>% layout(xaxis = list(showspikes=TRUE, spikemode='across',spikesnap='cursor',showline=TRUE,showgrid=TRUE), yaxis = list(title="increase"), autosize=TRUE, showlegend = TRUE, hovermode='x')
+    }) 
+    plotly::plotlyOutput("plot_c1")
+  } else {
+    p("No level-1 comment")
+  }
+})
+```
+
+
+### 二级评论赞每分钟增量
+
+```{r}
+c2_z = reactive({
+  user_input = input$user_input
+  post_time_input = input$weibo_input
+  comment2_z(user_input, post_time_input)
+})
+renderUI({
+  dat = c2_z()
+  if (nrow(dat) > 0) {
+    output$plot_c2 <- renderPlotly({
+      fig <- ggplot(data=dat, aes(x=crawler_time, y=increase, group=comment), height = "90%") +
+        geom_line(aes(linetype=action, color=comment), size=0.7) +
+        geom_point(aes(color=comment)) +
+        theme_bw()
+      fig = fig %>% ggplotly()
+      fig %>% layout(xaxis = list(showspikes=TRUE, spikemode='across',spikesnap='cursor',showline=TRUE,showgrid=TRUE), yaxis = list(title="increase"), autosize=TRUE, showlegend = TRUE, hovermode='x')
+    })
+    plotly::plotlyOutput("plot_c2")
+  } else {
+    p("No level-2 comment")
+  }
+})
+
+```
+
+
+
