@@ -59,9 +59,9 @@ renderPlotly({
 
 ```{r}
 renderPlotly({
-  fig <- plot_ly(daily_inc, x = ~hour, y = ~ZKN, name = 'ZKN', type = 'scatter', mode = 'lines+markers') 
-  fig <- fig %>% add_trace(y = ~XKY, name = 'XKY', mode = 'lines+markers') 
-  fig %>% layout(yaxis = list(title = "increase"), autosize=TRUE, height = "99%")
+  fig <- plot_ly(daily_inc, x = ~date, y = ~ZKN, name = 'ZKN', type = 'scatter', mode = 'lines+markers', line = list(width = 3)) 
+  fig <- fig %>% add_trace(y = ~XKY, name = 'XKY', mode = 'lines+markers', line = list(width = 3)) 
+  fig %>% layout(xaxis = list(showspikes=TRUE, spikemode='across',spikesnap='cursor',showline=TRUE,showgrid=TRUE), yaxis = list(title="increase"), autosize=TRUE, height = "99%", showlegend = TRUE, hovermode='x')
 }
 )
 ```   

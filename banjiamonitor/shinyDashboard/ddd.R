@@ -58,6 +58,7 @@ daily_inc_weibo = inner_join(
     distinct(user, crawler_time, post_time, link, like, comment, forward) %>% 
     mutate(date = as.Date(crawler_time, tz="Asia/Taipei")) %>% 
     group_by(user, link, date) %>% 
+    arrange(link, crawler_time) %>% 
     top_n(1, crawler_time) %>% 
     group_by(user, link) %>%
     mutate_at(c("like", "comment", "forward"), 
@@ -97,7 +98,8 @@ daily_inc = full_join(
   group_by(date, user) %>% 
   summarise(score = sum(score)) %>% 
   ungroup() %>% 
-  spread(user, score)
+  spread(user, score) %>% 
+  as.data.frame()
 
 
 # data for plotting hourly increase
