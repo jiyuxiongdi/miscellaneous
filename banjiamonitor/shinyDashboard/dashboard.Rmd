@@ -3,9 +3,8 @@ title: "BANJIA DATA Monitor"
 output: 
   flexdashboard::flex_dashboard:
     orientation: columns
-    social: menu
     vertical_layout: fill
-    source_code: 
+    source_code: https://bit.ly/30vBHPM
 runtime: shiny
 ---
 
