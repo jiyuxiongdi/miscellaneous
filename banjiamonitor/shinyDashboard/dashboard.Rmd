@@ -30,7 +30,7 @@ Column {data-width=300}
 
 ```{r}
 renderTable({
-  avail_score
+  data_list()$avail_score
 }, spacing = "xs", width = '100%', bordered = TRUE, striped = TRUE, align = "c")
 ```
 
@@ -45,7 +45,7 @@ Column {.tabset data-width=650}
     
 ```{r}
 renderPlotly({
-  fig <- plot_ly(hourly_inc, x = ~hour, y = ~ZKN, name = 'ZKN', type = 'scatter', mode = 'lines+markers', line = list(width = 3)) 
+  fig <- plot_ly(data_list()$hourly_inc, x = ~hour, y = ~ZKN, name = 'ZKN', type = 'scatter', mode = 'lines+markers', line = list(width = 3)) 
   fig <- fig %>% add_trace(y = ~XKY, name = 'XKY', mode = 'lines+markers', line = list(width = 3)) 
   fig %>% layout(xaxis = list(showspikes=TRUE, spikemode='across',spikesnap='cursor',showline=TRUE,showgrid=TRUE), yaxis = list(title="increase"), autosize=TRUE, height = "99%", showlegend = TRUE, hovermode='x')
 }) 
@@ -59,7 +59,7 @@ renderPlotly({
 
 ```{r}
 renderPlotly({
-  fig <- plot_ly(daily_inc, x = ~date, y = ~ZKN, name = 'ZKN', type = 'scatter', mode = 'lines+markers', line = list(width = 3)) 
+  fig <- plot_ly(data_list()$daily_inc, x = ~date, y = ~ZKN, name = 'ZKN', type = 'scatter', mode = 'lines+markers', line = list(width = 3)) 
   fig <- fig %>% add_trace(y = ~XKY, name = 'XKY', mode = 'lines+markers', line = list(width = 3)) 
   fig %>% layout(xaxis = list(showspikes=TRUE, spikemode='across',spikesnap='cursor',showline=TRUE,showgrid=TRUE), yaxis = list(title="increase"), autosize=TRUE, height = "99%", showlegend = TRUE, hovermode='x')
 }
@@ -74,12 +74,12 @@ Inputs {.sidebar}
 -------------------------------------
 
 ```{r}
-selectInput("user_input", "Select a weibo user", choices=avail_user, selected = avail_user[1], multiple = FALSE,
-  selectize = TRUE, width = NULL, size = NULL)
+renderUI({selectInput("user_input", "Select a weibo user", choices=data_list()$avail_user, multiple = FALSE,
+  selectize = TRUE, width = NULL, size = NULL)})
 
 avail_weibo <- reactive({
   user_input = input$user_input
-  weibo.data %>% filter(user==user_input) %>% filter(as.Date(crawler_time, tz="Asia/Taipei") == today) %>% 
+  data_list()$weibo.data %>% filter(user==user_input) %>% filter(as.Date(crawler_time, tz="Asia/Taipei") == today) %>% 
     distinct(post_time) %>% mutate(post_time = as.character(post_time)) %>% pull()
 })
 
@@ -89,7 +89,7 @@ renderUI({selectInput("weibo_input", "Select a weibo by post time", choices=avai
 weibo_link <- reactive({
   user_input = input$user_input
   post_time_input = input$weibo_input
-  weibo.data %>% filter(user==user_input) %>% filter(as.character(post_time)==post_time_input) %>% distinct(link) %>% pull()
+  data_list()$weibo.data %>% filter(user==user_input) %>% filter(as.character(post_time)==post_time_input) %>% distinct(link) %>% pull()
 })
 
 renderUI({
@@ -99,7 +99,7 @@ renderUI({
 weibo_info <- reactive({
   user_input = input$user_input
   post_time_input = input$weibo_input
-  weibo.data %>% 
+  data_list()$weibo.data %>% 
     filter(user==user_input) %>% 
     filter(as.character(post_time)==post_time_input) %>% 
     filter(child_comment_comment_id!="") %>% 
@@ -124,8 +124,8 @@ renderUI({
  
 Row {.tabset .tabset-fade}
 -------------------------------------
-    
-### 点赞评每分钟增量
+
+### 点赞评
     
 ```{r}
 w_zzp = reactive({
@@ -137,12 +137,27 @@ renderPlotly({
   fig <- plot_ly(w_zzp(), x = ~crawler_time, y = ~like, name = 'like', type = 'scatter', mode = 'lines+markers', line = list(width = 3))
   fig <- fig %>% add_trace(y = ~comment, name = 'comment', mode = 'lines+markers', line = list(width = 3)) 
   fig <- fig %>% add_trace(y = ~forward, name = 'forward', mode = 'lines+markers', line = list(width = 3)) 
+  fig %>% layout(xaxis = list(showspikes=TRUE, spikemode='across',spikesnap='cursor',showline=TRUE,showgrid=TRUE), yaxis = list(title="value"), autosize=TRUE, showlegend = TRUE, hovermode='x')
+}) 
+```
+
+### 点赞评每分钟增量
+    
+```{r}
+w_zzp_inc = reactive({
+  user_input = input$user_input
+  post_time_input = input$weibo_input
+  weibo_zzp_inc(user_input, post_time_input)
+})
+renderPlotly({
+  fig <- plot_ly(w_zzp_inc(), x = ~crawler_time, y = ~like, name = 'like', type = 'scatter', mode = 'lines+markers', line = list(width = 3))
+  fig <- fig %>% add_trace(y = ~comment, name = 'comment', mode = 'lines+markers', line = list(width = 3)) 
+  fig <- fig %>% add_trace(y = ~forward, name = 'forward', mode = 'lines+markers', line = list(width = 3)) 
   fig %>% layout(xaxis = list(showspikes=TRUE, spikemode='across',spikesnap='cursor',showline=TRUE,showgrid=TRUE), yaxis = list(title="increase"), autosize=TRUE, showlegend = TRUE, hovermode='x')
 }) 
 ```
     
-
-### 一级评论赞评每分钟增量
+### 一级评论赞评
 
 ```{r}
 c1_zp = reactive({
@@ -154,11 +169,11 @@ renderUI({
   dat = c1_zp()
   if (nrow(dat) > 0) {
     output$plot_c1 <- renderPlotly({
-      fig <- ggplot(data=dat, aes(x=crawler_time, y=increase, group=comment), height = "90%") +
+      fig <- ggplot(data=dat, aes(x=crawler_time, y=value, group=comment), height = "90%") +
         geom_line(aes(linetype=action, color=comment), size=0.7) +
         theme_bw()
       fig = fig %>% ggplotly()
-      fig %>% layout(xaxis = list(showspikes=TRUE, spikemode='across',spikesnap='cursor',showline=TRUE,showgrid=TRUE), yaxis = list(title="increase"), autosize=TRUE, showlegend = TRUE, hovermode='x')
+      fig %>% layout(xaxis = list(showspikes=TRUE, spikemode='across',spikesnap='cursor',showline=TRUE,showgrid=TRUE), yaxis = list(title="value"), autosize=TRUE, showlegend = TRUE, hovermode='x')
     }) 
     plotly::plotlyOutput("plot_c1")
   } else {
@@ -168,7 +183,32 @@ renderUI({
 ```
 
 
-### 二级评论赞每分钟增量
+### 一级评论赞评每分钟增量
+
+```{r}
+c1_zp_inc = reactive({
+  user_input = input$user_input
+  post_time_input = input$weibo_input
+  comment1_zp_inc(user_input, post_time_input)
+})
+renderUI({
+  dat = c1_zp_inc()
+  if (nrow(dat) > 0) {
+    output$plot_c1_inc <- renderPlotly({
+      fig <- ggplot(data=dat, aes(x=crawler_time, y=increase, group=comment), height = "90%") +
+        geom_line(aes(linetype=action, color=comment), size=0.7) +
+        theme_bw()
+      fig = fig %>% ggplotly()
+      fig %>% layout(xaxis = list(showspikes=TRUE, spikemode='across',spikesnap='cursor',showline=TRUE,showgrid=TRUE), yaxis = list(title="increase"), autosize=TRUE, showlegend = TRUE, hovermode='x')
+    }) 
+    plotly::plotlyOutput("plot_c1_inc")
+  } else {
+    p("No level-1 comment")
+  }
+})
+```
+
+### 二级评论赞
 
 ```{r}
 c2_z = reactive({
@@ -178,16 +218,45 @@ c2_z = reactive({
 })
 renderUI({
   dat = c2_z()
+  print(dat)
   if (nrow(dat) > 0) {
     output$plot_c2 <- renderPlotly({
+      fig <- ggplot(data=dat, aes(x=crawler_time, y=value, group=comment), height = "90%") +
+        geom_line(aes(color=comment), size=0.7) +
+        geom_point(aes(color=comment)) +
+        theme_bw()
+      fig = fig %>% ggplotly()
+      fig %>% layout(xaxis = list(showspikes=TRUE, spikemode='across',spikesnap='cursor',showline=TRUE,showgrid=TRUE), yaxis = list(title="value"), autosize=TRUE, showlegend = TRUE, hovermode='x')
+    })
+    plotly::plotlyOutput("plot_c2")
+  } else {
+    p("No level-2 comment")
+  }
+})
+
+```
+
+
+### 二级评论赞每分钟增量
+
+```{r}
+c2_z_inc = reactive({
+  user_input = input$user_input
+  post_time_input = input$weibo_input
+  comment2_z_inc(user_input, post_time_input)
+})
+renderUI({
+  dat = c2_z_inc()
+  if (nrow(dat) > 0) {
+    output$plot_c2_inc <- renderPlotly({
       fig <- ggplot(data=dat, aes(x=crawler_time, y=increase, group=comment), height = "90%") +
-        geom_line(aes(linetype=action, color=comment), size=0.7) +
+        geom_line(aes(color=comment), size=0.7) +
         geom_point(aes(color=comment)) +
         theme_bw()
       fig = fig %>% ggplotly()
       fig %>% layout(xaxis = list(showspikes=TRUE, spikemode='across',spikesnap='cursor',showline=TRUE,showgrid=TRUE), yaxis = list(title="increase"), autosize=TRUE, showlegend = TRUE, hovermode='x')
     })
-    plotly::plotlyOutput("plot_c2")
+    plotly::plotlyOutput("plot_c2_inc")
   } else {
     p("No level-2 comment")
   }
